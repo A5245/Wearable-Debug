@@ -1,4 +1,4 @@
-package test.hook.debug.xp;
+package test.hook.debug.xp.utils;
 
 /**
  * @author user

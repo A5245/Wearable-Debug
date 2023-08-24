@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="xposedscope">
+        <item>com.mi.health</item>
+        <item>com.xiaomi.wearable</item>
+    </string-array>
+</resources>

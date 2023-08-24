@@ -3,6 +3,8 @@ package test.hook.debug.xp;
 import android.app.Activity;
 import android.view.View;
 
+import com.github.kyuubiran.ezxhelper.EzXHelper;
+
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.lang.reflect.Field;
@@ -15,6 +17,9 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
+import test.hook.debug.xp.utils.DexKit;
+import test.hook.debug.xp.utils.Save;
+import test.hook.debug.xp.utils.V2;
 
 /**
  * Only tested on Mi Fitness 3.19.0i
@@ -31,8 +36,7 @@ public class MainHook implements IXposedHookLoadPackage {
             Object companionObj = XposedHelpers.getStaticObjectField(xmsManager, "Companion");
 
             Class<?> xmsManagerExtKt = XposedHelpers.findClass("com.xms.wearable.export.XmsManagerExtKt", classLoader);
-            Object instance = XposedHelpers.callStaticMethod(xmsManagerExtKt, "getInstance", new Class<?>[]{
-                    XposedHelpers.findClass("com.xms.wearable.export.XmsManager$Companion", classLoader)}, companionObj);
+            Object instance = XposedHelpers.callStaticMethod(xmsManagerExtKt, "getInstance", new Class<?>[]{XposedHelpers.findClass("com.xms.wearable.export.XmsManager$Companion", classLoader)}, companionObj);
 
             XposedHelpers.callMethod(instance, "gotoDebugPage", new Class<?>[]{Activity.class}, activity);
         } catch (Throwable e) {
@@ -47,8 +51,7 @@ public class MainHook implements IXposedHookLoadPackage {
         Class<?> deviceManager = XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManager", classLoader);
         Object companion = XposedHelpers.getStaticObjectField(deviceManager, "Companion");
         Class<?> deviceManagerExtKt = XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManagerExtKt", classLoader);
-        Object instance = XposedHelpers.callStaticMethod(deviceManagerExtKt, "getInstance", new Class<?>[]{
-                XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManager$Companion", classLoader)}, companion);
+        Object instance = XposedHelpers.callStaticMethod(deviceManagerExtKt, "getInstance", new Class<?>[]{XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManager$Companion", classLoader)}, companion);
         Object deviceModel = XposedHelpers.callMethod(instance, "getCurrentDeviceModel");
         if (deviceModel == null || !(boolean) XposedHelpers.callMethod(deviceModel, "isDeviceConnected")) {
             return true;
@@ -59,13 +62,9 @@ public class MainHook implements IXposedHookLoadPackage {
         Object pkgName = XposedHelpers.getObjectField(thisObj, "pkgName");
         Class<?> deviceModelExtKt = XposedHelpers.findClass("com.xiaomi.xms.wearable.extensions.DeviceModelExtKt", classLoader);
         Class<?> callback = XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment$unInstallApp$1", classLoader);
-        Object callbackObj = XposedHelpers.newInstance(callback, new Class<?>[]{
-                        XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment", classLoader), String.class},
-                thisObj, did);
+        Object callbackObj = XposedHelpers.newInstance(callback, new Class<?>[]{XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment", classLoader), String.class}, thisObj, did);
 
-        XposedHelpers.callStaticMethod(deviceModelExtKt, "uninstallApp", new Class<?>[]{
-                XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceModel", classLoader),
-                String.class, byte[].class, XposedHelpers.findClass("xi3", classLoader)}, deviceModel, pkgName, Save.sign, callbackObj);
+        XposedHelpers.callStaticMethod(deviceModelExtKt, "uninstallApp", new Class<?>[]{XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceModel", classLoader), String.class, byte[].class, XposedHelpers.findClass("xi3", classLoader)}, deviceModel, pkgName, Save.sign, callbackObj);
         return true;
     }
 
@@ -135,10 +134,14 @@ public class MainHook implements IXposedHookLoadPackage {
     }
 
     @Override
-    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) throws Throwable {
-        if (!"com.xiaomi.wearable".equals(loadPackageParam.packageName)) {
-            return;
-        }
+    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) throws ClassNotFoundException {
+        String packageName = loadPackageParam.packageName;
+        if (!packageName.equals("com.xiaomi.wearable") && !packageName.equals("com.mi.health")) return;
+        EzXHelper.initHandleLoadPackage(loadPackageParam);
+        EzXHelper.setLogTag("WearableDebug");
+        EzXHelper.setToastTag("WearableDebug");
+        DexKit.INSTANCE.initDexKit(loadPackageParam);
         loadHook(loadPackageParam.classLoader);
+        DexKit.INSTANCE.closeDexKit();
     }
 }
