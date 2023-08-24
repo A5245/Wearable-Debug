@@ -1,16 +1,17 @@
 package test.hook.debug.xp;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.view.View;
+import android.content.Context;
+import android.content.res.Resources;
 
+import com.github.kyuubiran.ezxhelper.ClassUtils;
 import com.github.kyuubiran.ezxhelper.EzXHelper;
+import com.github.kyuubiran.ezxhelper.HookFactory;
+import com.github.kyuubiran.ezxhelper.finders.MethodFinder;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.lang.reflect.Field;
-import java.security.MessageDigest;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
+import java.lang.reflect.Method;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -19,13 +20,8 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import test.hook.debug.xp.utils.DexKit;
 import test.hook.debug.xp.utils.Save;
-import test.hook.debug.xp.utils.V2;
+import test.hook.debug.xp.utils.SignUtils;
 
-/**
- * Only tested on Mi Fitness 3.19.0i
- *
- * @author user
- */
 public class MainHook implements IXposedHookLoadPackage {
     public MainHook() {
     }
@@ -68,58 +64,36 @@ public class MainHook implements IXposedHookLoadPackage {
         return true;
     }
 
-    private static byte[] sha1(byte[] data) {
-        try {
-            MessageDigest instance = MessageDigest.getInstance("SHA1");
-            return instance.digest(data);
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
 
-    private static byte[] generateSign(File file) throws Exception {
-        byte[] sign;
-        try (V2 v2 = new V2(file)) {
-            v2.skipZipEntry();
-            sign = v2.parseSign();
-        }
-        if (sign == null) {
-            return null;
-        }
-        CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
-        X509Certificate certificate = (X509Certificate) certificateFactory.generateCertificate(new ByteArrayInputStream(sign));
-        return sha1(certificate.getPublicKey().getEncoded());
-    }
+    @SuppressLint("DiscouragedApi")
+    private static void loadHook(ClassLoader classLoader) throws ClassNotFoundException {
+        // 使用关于页的 Activity 初始化 EzXHelper 的 context
+        Class<?> clazzAboutActivity = ClassUtils.loadClass("com.xiaomi.fitness.about.AboutActivity", null);
+        Method methodOnCreate = MethodFinder.fromClass(clazzAboutActivity).filterByName("onCreate").first();
+        HookFactory.createMethodHook(methodOnCreate, hookFactory -> hookFactory.before(param -> EzXHelper.initAppContext((Activity) param.thisObject, false)));
 
-    private static void loadHook(ClassLoader classLoader) {
-        Class<?> targetClass = XposedHelpers.findClass("ml", classLoader);
-        if (targetClass == null) {
-            return;
-        }
-        if (XposedHelpers.findMethodExactIfExists(targetClass, "onClick", View.class) == null) {
-            return;
-        }
-        XposedHelpers.findAndHookMethod(targetClass, "onClick", View.class, new XC_MethodReplacement() {
-            @Override
-            protected Object replaceHookedMethod(MethodHookParam methodHookParam) throws Throwable {
-                Field a = XposedHelpers.findFieldIfExists(targetClass, "a");
-                if (a == null) {
-                    return null;
-                }
-                a.setAccessible(true);
-                Object activity = a.get(methodHookParam.thisObject);
-                gotoDebugPage(classLoader, activity);
-                return null;
-            }
-        });
+        // 利用 WebViewUtilKt 这个未被混淆的工具类捕获启动用户协议的事件
+        Class<?> clazzWebViewUtilKt = ClassUtils.loadClass("com.xiaomi.fitness.webview.WebViewUtilKt", null);
+        Method methodStartWebView = MethodFinder.fromClass(clazzWebViewUtilKt).filterByName("startWebView").filterByAssignableParamTypes(String.class, String.class, boolean.class, boolean.class, Integer.class).first();
+        HookFactory.createMethodHook(methodStartWebView, hookFactory -> hookFactory.before(param -> {
+            // 获取用户协议字符串
+            Context appContext = EzXHelper.getAppContext();
+            Resources appResources = appContext.getResources();
+            int identifierAboutPrivacyLicenseAgreement = appResources.getIdentifier("about_privacy_license_agreement", "string", EzXHelper.hostPackageName);
+            String stringAboutPrivacyLicenseAgreement = appResources.getString(identifierAboutPrivacyLicenseAgreement);
+
+            // 若匹配，则拦截跳转
+            if (!stringAboutPrivacyLicenseAgreement.equals((String) param.args[1])) return;
+            gotoDebugPage(EzXHelper.getSafeClassLoader(), appContext);
+            param.setResult(null);
+        }));
+
         Class<?> thirdAppDebugFragment = XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment", classLoader);
-        if (thirdAppDebugFragment == null) {
-            return;
-        }
+        if (thirdAppDebugFragment == null) return;
 
         XposedHelpers.findAndHookMethod(thirdAppDebugFragment, "unInstallApp", new XC_MethodReplacement() {
             @Override
-            protected Object replaceHookedMethod(MethodHookParam methodHookParam) throws Throwable {
+            protected Object replaceHookedMethod(MethodHookParam methodHookParam) {
                 return unInstall(classLoader, methodHookParam.thisObject);
             }
         });
@@ -128,7 +102,7 @@ public class MainHook implements IXposedHookLoadPackage {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 super.beforeHookedMethod(param);
-                Save.sign = generateSign((File) param.args[0]);
+                Save.sign = SignUtils.generateSign((File) param.args[0]);
             }
         });
     }
