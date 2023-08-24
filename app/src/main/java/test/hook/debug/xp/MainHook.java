@@ -11,6 +11,7 @@ import com.github.kyuubiran.ezxhelper.HookFactory;
 import com.github.kyuubiran.ezxhelper.finders.MethodFinder;
 
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -40,7 +41,7 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    private static Object unInstall(ClassLoader classLoader, Object thisObj) {
+    private static Object unInstall(ClassLoader classLoader, Object thisObj) throws InvocationTargetException, IllegalAccessException {
         if (Save.sign == null) {
             return true;
         }
@@ -60,7 +61,9 @@ public class MainHook implements IXposedHookLoadPackage {
         Class<?> callback = XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment$unInstallApp$1", classLoader);
         Object callbackObj = XposedHelpers.newInstance(callback, new Class<?>[]{XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment", classLoader), String.class}, thisObj, did);
 
-        XposedHelpers.callStaticMethod(deviceModelExtKt, "uninstallApp", new Class<?>[]{XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceModel", classLoader), String.class, byte[].class, XposedHelpers.findClass("xi3", classLoader)}, deviceModel, pkgName, Save.sign, callbackObj);
+        Method uninstallApp = MethodFinder.fromClass(deviceModelExtKt).filterByName("uninstallApp").first();
+        uninstallApp.setAccessible(true);
+        uninstallApp.invoke(deviceModelExtKt, deviceModel, pkgName, Save.sign, callbackObj);
         return true;
     }
 
@@ -93,7 +96,7 @@ public class MainHook implements IXposedHookLoadPackage {
 
         XposedHelpers.findAndHookMethod(thirdAppDebugFragment, "unInstallApp", new XC_MethodReplacement() {
             @Override
-            protected Object replaceHookedMethod(MethodHookParam methodHookParam) {
+            protected Object replaceHookedMethod(MethodHookParam methodHookParam) throws Throwable {
                 return unInstall(classLoader, methodHookParam.thisObject);
             }
         });
