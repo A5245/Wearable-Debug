@@ -8,6 +8,7 @@ import android.content.res.Resources;
 import com.github.kyuubiran.ezxhelper.ClassUtils;
 import com.github.kyuubiran.ezxhelper.EzXHelper;
 import com.github.kyuubiran.ezxhelper.HookFactory;
+import com.github.kyuubiran.ezxhelper.Log;
 import com.github.kyuubiran.ezxhelper.finders.MethodFinder;
 
 import java.io.File;
@@ -77,7 +78,19 @@ public class MainHook implements IXposedHookLoadPackage {
 
         // 利用 WebViewUtilKt 这个未被混淆的工具类捕获启动用户协议的事件
         Class<?> clazzWebViewUtilKt = ClassUtils.loadClass("com.xiaomi.fitness.webview.WebViewUtilKt", null);
-        Method methodStartWebView = MethodFinder.fromClass(clazzWebViewUtilKt).filterByName("startWebView").filterByAssignableParamTypes(String.class, String.class, boolean.class, boolean.class, Integer.class).first();
+
+        // 小米运动健康 3.21.0
+        MethodFinder startWebViewFinder = MethodFinder.fromClass(clazzWebViewUtilKt).filterByName("startWebView").filterByAssignableParamTypes(String.class, String.class, boolean.class, boolean.class, Integer.class, boolean.class, Boolean.class);
+        Method methodStartWebView = startWebViewFinder.firstOrNull();
+        if (methodStartWebView == null) {
+            // 老版本 Hook 点
+            methodStartWebView = MethodFinder.fromClass(clazzWebViewUtilKt).filterByName("startWebView").filterByAssignableParamTypes(String.class, String.class, boolean.class, boolean.class, Integer.class).firstOrNull();
+        }
+        if (methodStartWebView == null) {
+            Log.e("Current version is not supported", null);
+            return;
+        }
+
         HookFactory.createMethodHook(methodStartWebView, hookFactory -> hookFactory.before(param -> {
             // 获取用户协议字符串
             Context appContext = EzXHelper.getAppContext();
