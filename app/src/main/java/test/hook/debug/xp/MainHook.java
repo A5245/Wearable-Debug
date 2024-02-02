@@ -42,14 +42,14 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    private static Object unInstall(ClassLoader classLoader, Object thisObj) throws InvocationTargetException, IllegalAccessException {
+    private static Object unInstall(ClassLoader classLoader, Object thisObj) throws InvocationTargetException, IllegalAccessException, ClassNotFoundException, NoSuchMethodException {
         if (Save.sign == null) {
             return true;
         }
-        Class<?> deviceManager = XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManager", classLoader);
+        Class<?> deviceManager = ClassUtils.loadFirstClass("com.xiaomi.fitness.device.manager.export.DeviceManager", "com.xiaomi.fitness.device.manager.export.WearableDeviceManager");
         Object companion = XposedHelpers.getStaticObjectField(deviceManager, "Companion");
         Class<?> deviceManagerExtKt = XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManagerExtKt", classLoader);
-        Object instance = XposedHelpers.callStaticMethod(deviceManagerExtKt, "getInstance", new Class<?>[]{XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManager$Companion", classLoader)}, companion);
+        Object instance = ClassUtils.invokeStaticMethodBestMatch(deviceManagerExtKt, "getInstance", null, companion);
         Object deviceModel = XposedHelpers.callMethod(instance, "getCurrentDeviceModel");
         if (deviceModel == null || !(boolean) XposedHelpers.callMethod(deviceModel, "isDeviceConnected")) {
             return true;
