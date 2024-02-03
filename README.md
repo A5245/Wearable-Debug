@@ -4,4 +4,4 @@ Xposed插件启用Mi Fitness第三方小程序安装卸载。激活插件后会�
 
 ## 注意
 
-当前代码兼容Google版的Mi Fitness 3.20.2i版本、国内版小米运动健康3.21.0版本
+当前代码兼容Google版的Mi Fitness 3.20.2i版本、国内版小米运动健康3.25.0版本
