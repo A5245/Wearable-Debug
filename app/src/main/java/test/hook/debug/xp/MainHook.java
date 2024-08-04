@@ -3,11 +3,15 @@ package test.hook.debug.xp;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
+import android.graphics.Color;
 import android.net.Uri;
-import android.widget.ProgressBar;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import com.github.kyuubiran.ezxhelper.ClassUtils;
 import com.github.kyuubiran.ezxhelper.EzXHelper;
@@ -16,24 +20,21 @@ import com.github.kyuubiran.ezxhelper.Log;
 import com.github.kyuubiran.ezxhelper.finders.MethodFinder;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 
+import de.robv.android.xposed.IXposedHookInitPackageResources;
 import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_InitPackageResources;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import test.hook.debug.xp.utils.DexKit;
 import test.hook.debug.xp.utils.Save;
 import test.hook.debug.xp.utils.SignUtils;
 
-public class MainHook implements IXposedHookLoadPackage {
+public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageResources, IXposedHookZygoteInit {
     public MainHook() {
     }
 
@@ -51,123 +52,97 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    /**
-     * 读取指定表盘文件ID
-     *
-     * @param file 表盘文件路径
-     * @return 表盘文件ID
-     */
-    private static String getWatchFaceId(File file) {
-        if (!file.exists()) {
-            return null;
-        }
-        StringBuilder builder = new StringBuilder();
-        try (FileInputStream stream = new FileInputStream(file)) {
-            if (stream.skip(40) != 40) {
-                return null;
-            }
-            int read;
-            while ((read = stream.read()) != 0) {
-                builder.append((char) read);
-            }
-        } catch (IOException e) {
-            Log.e(e, "getWatchFaceId");
-        }
-        return builder.toString();
+    private static TextView createOption(Context context) {
+        TextView view = new TextView(context);
+        view.setTextColor(Color.BLACK);
+        view.setTextSize(30);
+        return view;
     }
 
-    /**
-     * 安装表盘文件
-     *
-     * @param loader 当前类加载器
-     * @param file   表盘文件路径
-     * @param object ThirdAppDebugFragment的上下文
-     */
-    private static void installWatchFace(ClassLoader loader, File file, Object object) {
-        try {
-            String watchFaceId = getWatchFaceId(file);
-            if (watchFaceId == null) {
-                Log.e("Failed to get id from " + file.getAbsolutePath(), null);
-                return;
-            }
+    private static AlertDialog.Builder createWarningDialog(Context context) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle(context.getString(Res.firmware_warning_title));
+        builder.setMessage(context.getString(Res.firmware_warning));
+        builder.setCancelable(false);
+        return builder;
+    }
 
-            Class<?> model = XposedHelpers.findClass("com.xiaomi.fitness.watch.face.viewmodel.FaceDetailViewModel", loader);
-            Object instance = model.newInstance();
+    private static Dialog createSelectDialog(ClassLoader loader, Context context) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        layout.setLayoutParams(layoutParams);
 
-            Object controller = XposedHelpers.getObjectField(instance, "faceInstallController");
+        TextView app = createOption(context);
+        app.setText(Save.Type.APP.getText());
+        app.setOnClickListener(v -> {
+            Save.status = Save.Type.APP;
+            gotoDebugPage(loader, context);
+        });
 
-            Context context = (Context) XposedHelpers.callMethod(object, "getMActivity");
+        TextView face = createOption(context);
+        face.setText(Save.Type.WATCHFACE.getText());
+        face.setOnClickListener(v -> {
+            Save.status = Save.Type.WATCHFACE;
+            gotoDebugPage(loader, context);
+        });
 
-            AlertDialog.Builder builder = new AlertDialog.Builder(context);
-            builder.setCancelable(false);
-            ProgressBar progressBar = new ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal);
-            progressBar.setIndeterminate(false);
-
-            builder.setView(progressBar);
-            AlertDialog dialog = builder.create();
-            dialog.show();
-
-            Class<?> callbackClass = XposedHelpers.findClass("com.xiaomi.fitness.watch.face.install.FaceInstallPushCallback", loader);
-            Object callback = Proxy.newProxyInstance(loader, new Class<?>[]{callbackClass}, (proxy, method, args) -> {
-                try {
-                    switch (method.getName()) {
-                        case "onProgress": {
-                            int pos = (int) args[0];
-                            Log.i("p: " + pos, null);
-                            progressBar.setProgress(pos);
-                            break;
-                        }
-                        case "onFinish": {
-                            boolean success = (boolean) args[0];
-                            int code = (int) args[1];
-                            Log.i("success: " + success + " code: " + code, null);
-                            dialog.dismiss();
-                            break;
-                        }
-                    }
-                } catch (Throwable e) {
-                    Log.e(e, method.toString());
-                    if (dialog.isShowing()) {
-                        dialog.dismiss();
-                    }
-                }
-                return null;
+        TextView firmware = createOption(context);
+        firmware.setText(Save.Type.FIRMWARE.getText());
+        firmware.setOnClickListener(v -> {
+            AlertDialog.Builder warningDialog = createWarningDialog(context);
+            warningDialog.setPositiveButton("OK", (dialog, which) -> {
+                Save.status = Save.Type.FIRMWARE;
+                gotoDebugPage(loader, context);
             });
+            warningDialog.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+            warningDialog.show();
+        });
+        layout.setPadding(32, 32, 32, 32);
 
-            XposedHelpers.callMethod(controller, "doInstall", new Class<?>[]{
-                    String.class, String.class, Integer.class, callbackClass
-            }, file.getAbsolutePath(), watchFaceId, 0, callback);
-        } catch (Throwable e) {
-            Log.e(e, "installWatchFace");
-        }
+        layout.addView(app);
+        layout.addView(face);
+        layout.addView(firmware);
+
+        builder.setView(layout);
+        return builder.create();
     }
 
-    private static Object unInstall(ClassLoader classLoader, Object thisObj) throws InvocationTargetException, IllegalAccessException, ClassNotFoundException, NoSuchMethodException {
-        if (Save.sign == null) {
-            return true;
-        }
-        Class<?> deviceManager = ClassUtils.loadFirstClass("com.xiaomi.fitness.device.manager.export.DeviceManager", "com.xiaomi.fitness.device.manager.export.WearableDeviceManager");
-        Object companion = XposedHelpers.getStaticObjectField(deviceManager, "Companion");
-        Class<?> deviceManagerExtKt = XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManagerExtKt", classLoader);
-        Object instance = ClassUtils.invokeStaticMethodBestMatch(deviceManagerExtKt, "getInstance", null, companion);
-        Object deviceModel = XposedHelpers.callMethod(instance, "getCurrentDeviceModel");
-        if (deviceModel == null || !(boolean) XposedHelpers.callMethod(deviceModel, "isDeviceConnected")) {
-            return true;
-        }
-
-        Object did = XposedHelpers.callMethod(deviceModel, "getDid");
-
-        Object pkgName = XposedHelpers.getObjectField(thisObj, "pkgName");
-        Class<?> deviceModelExtKt = XposedHelpers.findClass("com.xiaomi.xms.wearable.extensions.DeviceModelExtKt", classLoader);
-        Class<?> callback = XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment$unInstallApp$1", classLoader);
-        Object callbackObj = XposedHelpers.newInstance(callback, new Class<?>[]{XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment", classLoader), String.class}, thisObj, did);
-
-        Method uninstallApp = MethodFinder.fromClass(deviceModelExtKt).filterByName("uninstallApp").first();
-        uninstallApp.setAccessible(true);
-        uninstallApp.invoke(deviceModelExtKt, deviceModel, pkgName, Save.sign, callbackObj);
-        return false;
+    /**
+     * 处理应用安装
+     */
+    private static void onHandleApp(Object thisObj, Intent intent) {
+        XposedHelpers.callMethod(thisObj, "prepareInstall",
+                new Class<?>[]{String.class, Intent.class}, "thirdapp.rpk", intent);
     }
 
+    /**
+     * 处理表盘安装
+     */
+    private static boolean onHandleWatchFace(ClassLoader loader, Context context, Uri data) throws Throwable {
+        File tmpFace = Install.saveTmpFile(context, data);
+        if (tmpFace == null) {
+            return false;
+        }
+        Install.installWatchFace(loader, tmpFace, context);
+        return true;
+    }
+
+    /**
+     * 处理固件安装
+     */
+    private static boolean onHandleFirmware(ClassLoader loader, Context context, Uri data) throws Throwable {
+        File tmpFace = Install.saveTmpFile(context, data);
+        if (tmpFace == null) {
+            return false;
+        }
+        Install.invokeUpdate(loader, context, tmpFace.getAbsolutePath());
+        return true;
+    }
 
     @SuppressLint("DiscouragedApi")
     private static void loadHook(ClassLoader classLoader) throws ClassNotFoundException {
@@ -192,7 +167,9 @@ public class MainHook implements IXposedHookLoadPackage {
         }
 
         Class<?> thirdAppDebugFragment = XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment", classLoader);
-        if (thirdAppDebugFragment == null) return;
+        if (thirdAppDebugFragment == null) {
+            return;
+        }
 
         HookFactory.createMethodHook(methodStartWebView, hookFactory -> hookFactory.before(param -> {
             // 获取用户协议字符串
@@ -202,20 +179,24 @@ public class MainHook implements IXposedHookLoadPackage {
             String stringAboutPrivacyLicenseAgreement = appResources.getString(identifierAboutPrivacyLicenseAgreement);
 
             // 若匹配，则拦截跳转
-            if (!stringAboutPrivacyLicenseAgreement.equals(param.args[1])) return;
+            if (!stringAboutPrivacyLicenseAgreement.equals(param.args[1])) {
+                return;
+            }
+
+            ClassLoader loader = EzXHelper.getSafeClassLoader();
 
             // 弹出选择当前安装模式
-            AlertDialog.Builder builder = new AlertDialog.Builder(appContext);
-            builder.setPositiveButton("WatchFace", (dialog, which) -> {
-                Save.isApp = false;
-                gotoDebugPage(EzXHelper.getSafeClassLoader(), appContext);
-            });
-            builder.setNegativeButton("App", (dialog, which) -> {
-                Save.isApp = true;
-                gotoDebugPage(EzXHelper.getSafeClassLoader(), appContext);
-            });
+            Dialog dialog = createSelectDialog(loader, appContext);
+            dialog.show();
 
-            builder.show();
+            // 设置当前模式显示
+            Method bindView = MethodFinder.fromClass(thirdAppDebugFragment).filterByName("bindView").firstOrNull();
+            if (bindView != null) {
+                HookFactory.createMethodHook(bindView, hookFactory1 -> hookFactory1.after(methodHookParam ->
+                        XposedHelpers.callMethod(methodHookParam.thisObject, "setTitle",
+                                new Class[]{String.class}, Save.status.getText())));
+            }
+
 
             // 拦截文件选择
             XposedHelpers.findAndHookMethod(thirdAppDebugFragment, "onActivityResult", int.class, int.class, Intent.class, new XC_MethodReplacement() {
@@ -230,24 +211,24 @@ public class MainHook implements IXposedHookLoadPackage {
                         return null;
                     }
 
-                    if (Save.isApp) {
-                        XposedHelpers.callMethod(param.thisObject, "prepareInstall",
-                                new Class<?>[]{String.class, Intent.class}, "thirdapp.rpk", arg);
-                        return null;
+                    Context context = (Context) XposedHelpers.callMethod(param.thisObject, "getMActivity");
+
+                    switch (Save.status) {
+                        case APP:
+                            onHandleApp(param.thisObject, arg);
+                            break;
+                        case WATCHFACE:
+                            if (!onHandleWatchFace(loader, context, data)) {
+                                Toast.makeText(context, appResources.getString(Res.fail_watchface), Toast.LENGTH_LONG).show();
+                            }
+                            break;
+                        case FIRMWARE:
+                            if (!onHandleFirmware(loader, context, data)) {
+                                Toast.makeText(context, appResources.getString(Res.fail_firmware), Toast.LENGTH_LONG).show();
+                            }
+                            break;
                     }
 
-                    // 保存到缓存目录
-                    File tmpFace = new File(appContext.getCacheDir(), "tmp_face");
-                    try (FileOutputStream stream = new FileOutputStream(tmpFace)) {
-                        byte[] bytes = new byte[0x400];
-                        try (InputStream inputStream = appContext.getContentResolver().openInputStream(data)) {
-                            int read;
-                            while ((read = inputStream.read(bytes)) != -1) {
-                                stream.write(bytes, 0, read);
-                            }
-                        }
-                    }
-                    installWatchFace(EzXHelper.getSafeClassLoader(), tmpFace, param.thisObject);
                     return null;
                 }
             });
@@ -257,7 +238,7 @@ public class MainHook implements IXposedHookLoadPackage {
         XposedHelpers.findAndHookMethod(thirdAppDebugFragment, "unInstallApp", new XC_MethodReplacement() {
             @Override
             protected Object replaceHookedMethod(MethodHookParam methodHookParam) throws Throwable {
-                return unInstall(classLoader, methodHookParam.thisObject);
+                return Install.unInstall(classLoader, methodHookParam.thisObject);
             }
         });
 
@@ -274,8 +255,9 @@ public class MainHook implements IXposedHookLoadPackage {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 super.afterHookedMethod(param);
-                if (Save.isApp) return;
-
+                if (Save.status == Save.Type.APP) {
+                    return;
+                }
                 param.setResult(true);
             }
         });
@@ -284,13 +266,28 @@ public class MainHook implements IXposedHookLoadPackage {
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) throws ClassNotFoundException {
         String packageName = loadPackageParam.packageName;
-        if (!"com.xiaomi.wearable".equals(packageName) && !"com.mi.health".equals(packageName))
+        if (!"com.xiaomi.wearable".equals(packageName) && !"com.mi.health".equals(packageName)) {
             return;
+        }
         EzXHelper.initHandleLoadPackage(loadPackageParam);
         EzXHelper.setLogTag("WearableDebug");
         EzXHelper.setToastTag("WearableDebug");
         DexKit.INSTANCE.initDexKit(loadPackageParam);
         loadHook(loadPackageParam.classLoader);
         DexKit.INSTANCE.closeDexKit();
+    }
+
+    @Override
+    public void handleInitPackageResources(XC_InitPackageResources.InitPackageResourcesParam resparam) throws Throwable {
+        String packageName = resparam.packageName;
+        if (!"com.xiaomi.wearable".equals(packageName) && !"com.mi.health".equals(packageName)) {
+            return;
+        }
+        Res.init(resparam);
+    }
+
+    @Override
+    public void initZygote(StartupParam startupParam) throws Throwable {
+        EzXHelper.initZygote(startupParam);
     }
 }

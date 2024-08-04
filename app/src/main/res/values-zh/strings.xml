@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="firmware_warning">该功能可能导致设备变砖，请谨慎使用。</string>
+    <string name="fail_watchface">安装表盘失败</string>
+    <string name="fail_firmware">安装固件失败</string>
+    <string name="firmware_warning_title">警告</string>
+</resources>
