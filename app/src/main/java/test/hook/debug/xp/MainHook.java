@@ -21,6 +21,7 @@ import com.github.kyuubiran.ezxhelper.finders.MethodFinder;
 
 import java.io.File;
 import java.lang.reflect.Method;
+import java.util.Collections;
 
 import de.robv.android.xposed.IXposedHookInitPackageResources;
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -144,6 +145,37 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
         return true;
     }
 
+    /**
+     * 国际版3.33.6i出现Banner广告，拦截广告加载
+     */
+    private static void interceptAd(ClassLoader classLoader) {
+        try {
+            Class<?> impl = ClassUtils.loadClass("com.fitness.banner.export.BannerImpl", classLoader);
+            for (Method method : impl.getDeclaredMethods()) {
+                if (method.getName().startsWith("getBannerListAsync")) {
+                    HookFactory.createMethodHook(method, hookFactory -> hookFactory.replace(methodHookParam -> null));
+                } else if (method.getName().startsWith("getBannerList")) {
+                    HookFactory.createMethodHook(method, hookFactory -> hookFactory.replace(methodHookParam -> Collections.emptyList()));
+                }
+            }
+        } catch (ClassNotFoundException ignored) {
+        }
+    }
+
+    private static void disableReport(ClassLoader classLoader) {
+        try {
+            Class<?> reportImpl = ClassUtils.loadClass("com.xiaomi.fitness.statistics.OnetrackImpl", classLoader);
+            for (Method method : reportImpl.getDeclaredMethods()) {
+                if (!"reportData".equals(method.getName())) {
+                    continue;
+                }
+                HookFactory.createMethodHook(method, hookFactory -> hookFactory.replace(methodHookParam -> null));
+            }
+
+        } catch (ClassNotFoundException ignore) {
+        }
+    }
+
     @SuppressLint("DiscouragedApi")
     private static void loadHook(ClassLoader classLoader) throws ClassNotFoundException {
         // 使用关于页的 Activity 初始化 EzXHelper 的 context
@@ -227,6 +259,8 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
                                 Toast.makeText(context, appResources.getString(Res.fail_firmware), Toast.LENGTH_LONG).show();
                             }
                             break;
+                        default:
+                            throw new IllegalStateException("Unexpected value: " + Save.status);
                     }
 
                     return null;
@@ -273,6 +307,8 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
         EzXHelper.setLogTag("WearableDebug");
         EzXHelper.setToastTag("WearableDebug");
         DexKit.INSTANCE.initDexKit(loadPackageParam);
+        interceptAd(loadPackageParam.classLoader);
+        disableReport(loadPackageParam.classLoader);
         loadHook(loadPackageParam.classLoader);
         DexKit.INSTANCE.closeDexKit();
     }

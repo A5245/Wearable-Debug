@@ -93,6 +93,8 @@ public class Install {
                             dialog.dismiss();
                             break;
                         }
+                        default:
+                            throw new IllegalStateException("Unexpected value: " + method.getName());
                     }
                 } catch (Throwable e) {
                     Log.e(e, method.toString());
