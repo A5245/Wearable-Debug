@@ -4,4 +4,6 @@
     <string name="fail_watchface">安装表盘失败</string>
     <string name="fail_firmware">安装固件失败</string>
     <string name="firmware_warning_title">警告</string>
+    <string name="success_log">成功</string>
+    <string name="fail_log">错误</string>
 </resources>

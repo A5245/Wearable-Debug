@@ -22,6 +22,7 @@ import com.github.kyuubiran.ezxhelper.finders.MethodFinder;
 import java.io.File;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.Locale;
 
 import de.robv.android.xposed.IXposedHookInitPackageResources;
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -80,20 +81,38 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
 
         TextView app = createOption(context);
         app.setText(Save.Type.APP.getText());
-        app.setOnClickListener(v -> {
-            Save.status = Save.Type.APP;
-            gotoDebugPage(loader, context);
-        });
 
         TextView face = createOption(context);
         face.setText(Save.Type.WATCHFACE.getText());
-        face.setOnClickListener(v -> {
-            Save.status = Save.Type.WATCHFACE;
-            gotoDebugPage(loader, context);
-        });
 
         TextView firmware = createOption(context);
         firmware.setText(Save.Type.FIRMWARE.getText());
+
+        TextView pullLog = createOption(context);
+        pullLog.setText(Save.Type.PULL_LOG.getText());
+
+        layout.setPadding(32, 32, 32, 32);
+
+        layout.addView(app);
+        layout.addView(face);
+        layout.addView(firmware);
+        layout.addView(pullLog);
+
+        builder.setView(layout);
+        AlertDialog result = builder.create();
+
+        app.setOnClickListener(v -> {
+            Save.status = Save.Type.APP;
+            gotoDebugPage(loader, context);
+            result.dismiss();
+        });
+
+        face.setOnClickListener(v -> {
+            Save.status = Save.Type.WATCHFACE;
+            gotoDebugPage(loader, context);
+            result.dismiss();
+        });
+
         firmware.setOnClickListener(v -> {
             AlertDialog.Builder warningDialog = createWarningDialog(context);
             warningDialog.setPositiveButton("OK", (dialog, which) -> {
@@ -102,15 +121,27 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
             });
             warningDialog.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
             warningDialog.show();
+            result.dismiss();
         });
-        layout.setPadding(32, 32, 32, 32);
 
-        layout.addView(app);
-        layout.addView(face);
-        layout.addView(firmware);
+        pullLog.setOnClickListener(v -> {
+            DeviceLog.pullLog(loader, new DeviceLog.Callback() {
+                @Override
+                public void onError(String msg) {
+                    Toast.makeText(context, String.format(Locale.getDefault(), "%s: %s", context.getString(Res.fail_log), msg),
+                            Toast.LENGTH_LONG).show();
+                }
 
-        builder.setView(layout);
-        return builder.create();
+                @Override
+                public void onSuccess(String path) {
+                    Toast.makeText(context, String.format(Locale.getDefault(), "%s: %s", context.getString(Res.success_log), path),
+                            Toast.LENGTH_LONG).show();
+                }
+            });
+            result.dismiss();
+        });
+
+        return result;
     }
 
     /**

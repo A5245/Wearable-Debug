@@ -128,6 +128,18 @@ public class Install {
                 context, path, false);
     }
 
+    public static Object getCurrentDevice(ClassLoader loader) throws ClassNotFoundException, NoSuchMethodException {
+        Class<?> deviceManager = ClassUtils.loadFirstClass("com.xiaomi.fitness.device.manager.export.DeviceManager", "com.xiaomi.fitness.device.manager.export.WearableDeviceManager");
+        Object companion = XposedHelpers.getStaticObjectField(deviceManager, "Companion");
+        Class<?> deviceManagerExtKt = XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManagerExtKt", loader);
+        Object instance = ClassUtils.invokeStaticMethodBestMatch(deviceManagerExtKt, "getInstance", null, companion);
+        Object deviceModel = XposedHelpers.callMethod(instance, "getCurrentDeviceModel");
+        if (deviceModel == null || !(boolean) XposedHelpers.callMethod(deviceModel, "isDeviceConnected")) {
+            return null;
+        }
+        return deviceModel;
+    }
+
     /**
      * 卸载应用
      *
@@ -138,12 +150,8 @@ public class Install {
         if (Save.sign == null) {
             return true;
         }
-        Class<?> deviceManager = ClassUtils.loadFirstClass("com.xiaomi.fitness.device.manager.export.DeviceManager", "com.xiaomi.fitness.device.manager.export.WearableDeviceManager");
-        Object companion = XposedHelpers.getStaticObjectField(deviceManager, "Companion");
-        Class<?> deviceManagerExtKt = XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManagerExtKt", loader);
-        Object instance = ClassUtils.invokeStaticMethodBestMatch(deviceManagerExtKt, "getInstance", null, companion);
-        Object deviceModel = XposedHelpers.callMethod(instance, "getCurrentDeviceModel");
-        if (deviceModel == null || !(boolean) XposedHelpers.callMethod(deviceModel, "isDeviceConnected")) {
+        Object deviceModel = getCurrentDevice(loader);
+        if (deviceModel == null) {
             return true;
         }
 

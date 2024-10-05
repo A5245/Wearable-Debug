@@ -4,4 +4,6 @@
     <string name="fail_watchface">Failed to install watchface</string>
     <string name="fail_firmware">Failed to install firmware</string>
     <string name="firmware_warning_title">Warning</string>
+    <string name="success_log">Success</string>
+    <string name="fail_log">Fail</string>
 </resources>

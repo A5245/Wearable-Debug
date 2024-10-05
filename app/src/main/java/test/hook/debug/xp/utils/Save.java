@@ -5,11 +5,13 @@ package test.hook.debug.xp.utils;
  */
 public class Save {
     public static byte[] sign;
-    // 判断当前安装内容
+    /**
+     * 判断当前安装内容
+     */
     public static Type status = Type.APP;
 
     public enum Type {
-        APP("App"), WATCHFACE("WatchFace"), FIRMWARE("Firmware");
+        APP("App"), WATCHFACE("WatchFace"), FIRMWARE("Firmware"), PULL_LOG("Pull log");
 
         private final String text;
 
