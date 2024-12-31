@@ -7,10 +7,8 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
-import android.graphics.Color;
 import android.net.Uri;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import com.github.kyuubiran.ezxhelper.ClassUtils;
@@ -19,10 +17,14 @@ import com.github.kyuubiran.ezxhelper.HookFactory;
 import com.github.kyuubiran.ezxhelper.Log;
 import com.github.kyuubiran.ezxhelper.finders.MethodFinder;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.io.File;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.Map;
 
 import de.robv.android.xposed.IXposedHookInitPackageResources;
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -32,6 +34,7 @@ import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_InitPackageResources;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
+import test.hook.debug.xp.ui.DialogView;
 import test.hook.debug.xp.utils.DexKit;
 import test.hook.debug.xp.utils.Save;
 import test.hook.debug.xp.utils.SignUtils;
@@ -54,13 +57,6 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
         }
     }
 
-    private static TextView createOption(Context context) {
-        TextView view = new TextView(context);
-        view.setTextColor(Color.BLACK);
-        view.setTextSize(30);
-        return view;
-    }
-
     private static AlertDialog.Builder createWarningDialog(Context context) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         builder.setTitle(context.getString(Res.firmware_warning_title));
@@ -71,49 +67,24 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
 
     private static Dialog createSelectDialog(ClassLoader loader, Context context) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        LinearLayout layout = new LinearLayout(context);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        layout.setLayoutParams(layoutParams);
+        DialogView view = DialogView.create(context);
 
-        TextView app = createOption(context);
-        app.setText(Save.Type.APP.getText());
-
-        TextView face = createOption(context);
-        face.setText(Save.Type.WATCHFACE.getText());
-
-        TextView firmware = createOption(context);
-        firmware.setText(Save.Type.FIRMWARE.getText());
-
-        TextView pullLog = createOption(context);
-        pullLog.setText(Save.Type.PULL_LOG.getText());
-
-        layout.setPadding(32, 32, 32, 32);
-
-        layout.addView(app);
-        layout.addView(face);
-        layout.addView(firmware);
-        layout.addView(pullLog);
-
-        builder.setView(layout);
+        builder.setView(view.getView());
         AlertDialog result = builder.create();
 
-        app.setOnClickListener(v -> {
+        view.addNode(Save.Type.APP.getText(), v -> {
             Save.status = Save.Type.APP;
             gotoDebugPage(loader, context);
             result.dismiss();
         });
 
-        face.setOnClickListener(v -> {
+        view.addNode(Save.Type.WATCHFACE.getText(), v -> {
             Save.status = Save.Type.WATCHFACE;
             gotoDebugPage(loader, context);
             result.dismiss();
         });
 
-        firmware.setOnClickListener(v -> {
+        view.addNode(Save.Type.FIRMWARE.getText(), v -> {
             AlertDialog.Builder warningDialog = createWarningDialog(context);
             warningDialog.setPositiveButton("OK", (dialog, which) -> {
                 Save.status = Save.Type.FIRMWARE;
@@ -124,11 +95,12 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
             result.dismiss();
         });
 
-        pullLog.setOnClickListener(v -> {
-            DeviceLog.pullLog(loader, new DeviceLog.Callback() {
+        view.addNode(Save.Type.PULL_LOG.getText(), v -> {
+            DeviceLog.pullLog(loader, new Callback<String>() {
                 @Override
-                public void onError(String msg) {
-                    Toast.makeText(context, String.format(Locale.getDefault(), "%s: %s", context.getString(Res.fail_log), msg),
+                public void onError(String msg, @Nullable Throwable e) {
+                    Toast.makeText(context, String.format(Locale.getDefault(), "%s: %s\n%s",
+                                    context.getString(Res.fail_log), msg, android.util.Log.getStackTraceString(e)),
                             Toast.LENGTH_LONG).show();
                 }
 
@@ -136,6 +108,35 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
                 public void onSuccess(String path) {
                     Toast.makeText(context, String.format(Locale.getDefault(), "%s: %s", context.getString(Res.success_log), path),
                             Toast.LENGTH_LONG).show();
+                }
+            });
+            result.dismiss();
+        });
+
+        view.addNode(Save.Type.ENCRYPT_KEY.getText(), v -> {
+            EncryptKey.showEncryptKey(loader, new Callback<Map<String, String[]>>() {
+                @Override
+                public void onError(String msg, @Nullable Throwable e) {
+                    Toast.makeText(context, String.format(Locale.getDefault(), "%s: %s\n%s",
+                                    context.getString(Res.fail_log), msg, android.util.Log.getStackTraceString(e)),
+                            Toast.LENGTH_LONG).show();
+                }
+
+                @Override
+                public void onSuccess(Map<String, String[]> obj) {
+                    AlertDialog.Builder builder = new AlertDialog.Builder(context);
+                    EditText text = new EditText(context);
+                    text.setTextColor(context.getColor(android.R.color.primary_text_light));
+                    text.setBackground(context.getDrawable(android.R.drawable.edit_text));
+                    text.setHintTextColor(context.getColor(android.R.color.darker_gray));
+
+                    StringBuilder sb = new StringBuilder();
+                    for (Map.Entry<String, String[]> entry : obj.entrySet()) {
+                        sb.append(entry.getKey()).append(": ").append(Arrays.toString(entry.getValue())).append("\n");
+                    }
+                    text.setText(sb.toString());
+                    builder.setView(text);
+                    builder.show();
                 }
             });
             result.dismiss();

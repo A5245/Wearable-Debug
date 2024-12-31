@@ -11,7 +11,7 @@ public class Save {
     public static Type status = Type.APP;
 
     public enum Type {
-        APP("App"), WATCHFACE("WatchFace"), FIRMWARE("Firmware"), PULL_LOG("Pull log");
+        APP("App"), WATCHFACE("WatchFace"), FIRMWARE("Firmware"), PULL_LOG("Pull log"), ENCRYPT_KEY("Encrypt Key");
 
         private final String text;
 

@@ -1,7 +1,6 @@
 package test.hook.debug.xp;
 
 import com.github.kyuubiran.ezxhelper.ClassUtils;
-import com.github.kyuubiran.ezxhelper.Log;
 import com.github.kyuubiran.ezxhelper.finders.MethodFinder;
 
 import java.lang.reflect.Method;
@@ -29,14 +28,14 @@ public class DeviceLog {
      * @param classLoader 当前类加载器
      * @param cb          事件回调
      */
-    public static void pullLog(ClassLoader classLoader, Callback cb) {
+    public static void pullLog(ClassLoader classLoader, Callback<String> cb) {
         try {
             Object currentDevice = Install.getCurrentDevice(classLoader);
 
             Class<?> deviceModelExtKt = XposedHelpers.findClass("com.xiaomi.fitness.device.manager.DeviceModelExtKt", classLoader);
             boolean isWear = (boolean) ClassUtils.invokeStaticMethodBestMatch(deviceModelExtKt, "isWearOS", null, currentDevice);
             if (isWear) {
-                cb.onError("Not support wearos device");
+                cb.onError("Not support wearos device", null);
                 return;
             }
 
@@ -52,7 +51,7 @@ public class DeviceLog {
                     String s = (String) args[0];
                     int type = (int) args[1];
                     int code = (int) args[2];
-                    cb.onError("syncLogFromBleDevice onError: " + s + " type=" + type + "**code=" + code);
+                    cb.onError("syncLogFromBleDevice onError: " + s + " type=" + type + "**code=" + code, null);
                 } else if ("onSuccess".equals(name)) {
                     String s = (String) args[0];
                     int v = (int) args[1];
@@ -64,24 +63,7 @@ public class DeviceLog {
             });
             XposedHelpers.callMethod(instance, "syncLogFromBleDevice", currentDevice, callback);
         } catch (Exception e) {
-            cb.onError(e.getMessage());
-            Log.e(e, "pullLog");
+            cb.onError(e.getMessage(), e);
         }
-    }
-
-    public interface Callback {
-        /**
-         * 异常消息回调
-         *
-         * @param msg 错误描述
-         */
-        void onError(String msg);
-
-        /**
-         * 成功回调
-         *
-         * @param path 输出路径
-         */
-        void onSuccess(String path);
     }
 }

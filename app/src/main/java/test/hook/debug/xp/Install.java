@@ -128,11 +128,21 @@ public class Install {
                 context, path, false);
     }
 
-    public static Object getCurrentDevice(ClassLoader loader) throws ClassNotFoundException, NoSuchMethodException {
+    /**
+     * 获取设备管理器
+     *
+     * @param loader 当前类加载器
+     * @return com.xiaomi.fitness.device.manager.WearableDeviceManagerImpl
+     */
+    public static Object getDeviceManager(ClassLoader loader) throws ClassNotFoundException, NoSuchMethodException {
         Class<?> deviceManager = ClassUtils.loadFirstClass("com.xiaomi.fitness.device.manager.export.DeviceManager", "com.xiaomi.fitness.device.manager.export.WearableDeviceManager");
         Object companion = XposedHelpers.getStaticObjectField(deviceManager, "Companion");
         Class<?> deviceManagerExtKt = XposedHelpers.findClass("com.xiaomi.fitness.device.manager.export.DeviceManagerExtKt", loader);
-        Object instance = ClassUtils.invokeStaticMethodBestMatch(deviceManagerExtKt, "getInstance", null, companion);
+        return ClassUtils.invokeStaticMethodBestMatch(deviceManagerExtKt, "getInstance", null, companion);
+    }
+
+    public static Object getCurrentDevice(ClassLoader loader) throws ClassNotFoundException, NoSuchMethodException {
+        Object instance = getDeviceManager(loader);
         Object deviceModel = XposedHelpers.callMethod(instance, "getCurrentDeviceModel");
         if (deviceModel == null || !(boolean) XposedHelpers.callMethod(deviceModel, "isDeviceConnected")) {
             return null;
