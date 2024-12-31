@@ -27,3 +27,7 @@ Xposed插件启用Mi Fitness第三方小程序安装卸载，表盘安装，固�
 ### 日志拉取
 
 点击Profile->About this app->User Agreemnt后在弹窗中选择Pull log。日志会输出到/sdcard/Android/data/[应用包名]/files/log/devicelog/
+
+### 获取EncryptKey
+
+点击Profile->About this app->User Agreemnt后在弹窗中选择Encrypt Key。获取当前设备上保存的EncryptKey信息。输出格式为：设备Did: [设备名称, Encrypt Key]
