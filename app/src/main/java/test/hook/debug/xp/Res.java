@@ -25,7 +25,7 @@ public class Res {
         fail_firmware = resparam.res.addResource(modRes, R.string.fail_firmware);
         fail_log = resparam.res.addResource(modRes, R.string.fail_log);
         success_log = resparam.res.addResource(modRes, R.string.success_log);
-        main = resparam.res.addResource(modRes, R.layout.main);
-        options = resparam.res.addResource(modRes, R.id.options);
+        main = resparam.res.addResource(modRes, R.layout.wearable_main);
+        options = resparam.res.addResource(modRes, R.id.wearable_options);
     }
 }
