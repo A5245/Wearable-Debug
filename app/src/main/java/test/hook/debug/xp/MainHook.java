@@ -215,25 +215,19 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookInitPackageR
         Method methodOnCreate = MethodFinder.fromClass(clazzAboutActivity).filterByName("onCreate").first();
         HookFactory.createMethodHook(methodOnCreate, hookFactory -> hookFactory.before(param -> EzXHelper.initAppContext((Activity) param.thisObject, false)));
 
-        // 利用 WebViewUtilKt 这个未被混淆的工具类捕获启动用户协议的事件
-        Class<?> clazzWebViewUtilKt = ClassUtils.loadClass("com.xiaomi.fitness.webview.WebViewUtilKt", null);
-
-        // 小米运动健康 3.21.0
-        MethodFinder startWebViewFinder = MethodFinder.fromClass(clazzWebViewUtilKt).filterByName("startWebView").filterByAssignableParamTypes(String.class, String.class, boolean.class, boolean.class, Integer.class, boolean.class, Boolean.class);
-        Method methodStartWebView = startWebViewFinder.firstOrNull();
-        if (methodStartWebView == null) {
-            // 老版本 Hook 点
-            methodStartWebView = MethodFinder.fromClass(clazzWebViewUtilKt).filterByName("startWebView").filterByAssignableParamTypes(String.class, String.class, boolean.class, boolean.class, Integer.class).firstOrNull();
+        Class<?> thirdAppDebugFragment = XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment", classLoader);
+        if (thirdAppDebugFragment == null) {
+            Log.e("ThirdAppDebugFragment not found", null);
+            return;
         }
+
+        Method methodStartWebView = EntryPoint.findEntryPoint();
         if (methodStartWebView == null) {
             Log.e("Current version is not supported", null);
             return;
         }
 
-        Class<?> thirdAppDebugFragment = XposedHelpers.findClass("com.xiaomi.xms.wearable.ui.debug.ThirdAppDebugFragment", classLoader);
-        if (thirdAppDebugFragment == null) {
-            return;
-        }
+        Log.i("Entry point " + methodStartWebView.toString(), null);
 
         HookFactory.createMethodHook(methodStartWebView, hookFactory -> hookFactory.before(param -> {
             // 获取用户协议字符串
