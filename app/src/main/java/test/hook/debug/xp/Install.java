@@ -121,8 +121,8 @@ public class Install {
      * @param path    固件文件位置
      */
     public static void invokeUpdate(ClassLoader loader, Object context, String path) {
-        Class<?> updateExt = XposedHelpers.findClass("com.mi.fitness.checkupdate.util.CheckUpdateExtKt", loader);
-        Object manager = XposedHelpers.callStaticMethod(updateExt, "getCheckUpdateManager");
+        Class<?> checkUpdateManagerImpl = XposedHelpers.findClass("com.mi.fitness.checkupdate.util.CheckUpdateManagerImpl", loader);
+        Object manager = XposedHelpers.newInstance(checkUpdateManagerImpl);
         // boolean参数为true时为静默安装
         XposedHelpers.callMethod(manager, "manualUpgrade", new Class[]{Context.class, String.class, boolean.class},
                 context, path, false);
